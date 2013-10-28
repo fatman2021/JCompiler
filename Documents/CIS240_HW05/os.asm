@@ -449,7 +449,7 @@ TRAP_PUTS
 
 	LC R1, OS_ADDR_ADDR
 	LDR R2, R0, #0 	; Load character into R2
-	BRzp END_PUTS 	; End if character is 0
+	BRz END_PUTS 	; End if character is 0
 	STR R2, R1, #0 	; Store character in data register
 	ADD R0, R0, #1 	; Increment char address
 ;;; Not sure if this is necessary : ADD R1, R1, #1  ; Increment data register address 
@@ -472,14 +472,17 @@ END_PUTS
 	.CODE
 TRAP_GET_EVENT
 
-	LC R0, OS_KBSR_ADDR 	; Load keyboard status
-	BRzp CHECK_TIMER		; If not 1, check timer
-	LC R5, OS_KBDR_ADDR 	; Load keyboard data
-	BRnzp END_GET_EVENT
-CHECK_TIMER
 	LC R0, OS_TSR_ADDR 		; Load timer status
-	BRzp TRAP_GET_EVENT 	; If not 1, loop
+	LDR R0, R0, #0
+	BRzp CHECK_KEYBOARD 	; If not 1, check keyboard
 	CONST R5, #0 			; Set r5 to 0
+	BRnzp END_GET_EVENT
+CHECK_KEYBOARD
+	LC R0, OS_KBSR_ADDR 	; Load keyboard status
+	LDR R0, R0, #0
+	BRzp TRAP_GET_EVENT		; If not 1, loop
+	LC R5, OS_KBDR_ADDR 	; Load keyboard data
+	LDR R5, R5, #0
 
 END_GET_EVENT
 	RTI
@@ -511,7 +514,7 @@ TRAP_DRAW_RECT
 
 
 ;;; Clear some space
-	LEA R5, OS_GLOBAL_MEM
+	LEA R5, OS_GLOBALS_MEM
 	STR R4, R5, #0 	; Store color in global
 	STR R7, R5, #1 	; Store return address in global
 	STR R0, R5, #2  ; Store starting col in global
@@ -528,24 +531,24 @@ RECT_OUTER_LOOP
 RECT_INNER_LOOP
 	LC R5, OS_VIDEO_NUM_COLS
 	CMPI R2, #0 	; Check if width index reaches zero
-	BRnz END_INNER_LOOP
+	BRnz RECT_END_INNER_LOOP
 	CMP R0, R5  	; Check if current col exceeds number of cols
-	BRzp END_INNER_LOOP
+	BRzp RECT_END_INNER_LOOP
 	CMPI R0, #0 	; Check if current col is less than zero
 	BRn RECT_ADJUST_COL
 	LEA R4, OS_VIDEO_MEM
 	MUL R6, R1, R5 	; Multiply current row by number of columns
 	ADD R6, R6, R0  ; Add current col to this result
 	ADD R4, R4, R6  ; Offset place in video mem
-	LEA R6, OS_GLOBAL_MEM
+	LEA R6, OS_GLOBALS_MEM
 	LDR R7, R6, #0  ; Load color
 	STR R7, R4, #0  ; Store pixel at correct place in video mem
 RECT_ADJUST_COL
 	ADD R0, R0, #1  ; Increment current col
 	ADD R2, R2, #-1 ; Decrement width index
-	BRnzp REC_INNER_LOOP 
+	BRnzp RECT_INNER_LOOP 
 RECT_END_INNER_LOOP
-	LEA R6, OS_GLOBAL_MEM
+	LEA R6, OS_GLOBALS_MEM
 	LDR R0, R6, #2 		; Reset col
 	LDR R2, R6, #3 		; Reset col index
 	ADD R3, R3, #-1 	; Decrement row index
@@ -553,7 +556,7 @@ RECT_END_INNER_LOOP
 	BRnzp RECT_OUTER_LOOP
 
 END_DRAW_RECT
-	LEA R6, OS_GLOBAL_MEM
+	LEA R6, OS_GLOBALS_MEM
 	LDR R7, R6, #1  	; Restore return address
 	RTI
 	
@@ -577,7 +580,7 @@ TRAP_DRAW_SPRITE
 	BRzp END_DRAW_SPRITE
 
 ;;; Clear some space
-	LEA R6, OS_GLOBAL_MEM
+	LEA R6, OS_GLOBALS_MEM
 	STR R2, R6, #0 	; Store color	
 	STR R3, R6, #1 	; Store address of bitmap
 	STR R7, R6, #2 	; Store return address
@@ -587,19 +590,19 @@ TRAP_DRAW_SPRITE
 	CONST R3, #0 	; Initialize row index
 
 SPRITE_OUTER_LOOP
-	LC R4, OS_NUM_ROWS
+	LC R4, OS_VIDEO_NUM_ROWS
 	CMP R1, R4 		; Check if current row reaches number of rows
 	BRzp END_DRAW_SPRITE
 	CMPI R3, #8 	; Check if row index reaches eight
 	BRzp END_DRAW_SPRITE
 	CMPI R1, #0 	; Check if current row is less than zero
 	BRn SPRITE_END_INNER_LOOP
-	LEA R5, OS_GLOBAL_MEM 
+	LEA R5, OS_GLOBALS_MEM 
 	LDR R5, R5, #1 	; Load address of bitmap
 	ADD R5, R5, R3 	; Offset address by row index
 	LDR R5, R5, #0  ; Load word
 SPRITE_INNER_LOOP
-	LC R4, OS_NUM_COLS
+	LC R4, OS_VIDEO_NUM_COLS
 	CMP R0, R4  	; Check if current col reaches number of cols
 	BRzp SPRITE_END_INNER_LOOP
 	CMPI R2, #8 	; Check if col index reaches 8
@@ -614,7 +617,7 @@ SPRITE_INNER_LOOP
 	ADD R6, R6, R0  ; Add current col to this result
 	LEA R4, OS_VIDEO_MEM
 	ADD R4, R4, R6  ; Offset video mem by current position
-	LEA R6, OS_GLOBAL_MEM
+	LEA R6, OS_GLOBALS_MEM
 	LDR R6, R6, #0  ; Load color
 	STR R6, R4, #0  ; Store pixel in video mem
 SPRITE_ADJUST_COL
@@ -625,11 +628,12 @@ SPRITE_ADJUST_COL
 SPRITE_END_INNER_LOOP
 	ADD R1, R1, #1  ; Increment row
 	ADD R3, R3, #1  ; Increment row index
-	LEA R6, OS_GLOBAL_MEM
+	LEA R6, OS_GLOBALS_MEM
 	LDR R0, R6, #3  ; Reset col
 	CONST R2, #0; Reset col index
 	BRnzp SPRITE_OUTER_LOOP
 	
 END_DRAW_SPRITE
- 	;; Reload return address
+ 	LEA R6, OS_GLOBALS_MEM
+ 	LDR R7, R6, #2
 	RTI
