@@ -522,6 +522,8 @@ CHECK_ROW_START
 	LEA R5, OS_GLOBAL_MEM
 	STR R4, R5, #0 	; Store color in global
 	STR R7, R5, #1 	; Store return address in global
+	STR R0, R5, #2  ; Store starting col in global
+	STR R2, R5, #3  ; Store starting col index in global
 
 RECT_OUTER_LOOP
 	LC R5, OS_VIDEO_NUM_ROWS
@@ -542,13 +544,20 @@ RECT_INNER_LOOP
 	LEA R6, OS_GLOBAL_MEM
 	LDR R7, R6, #0  ; Load color
 	STR R7, R4, #0
-	ADD R0, R0, #1
+	ADD R0, R0, #1  ; Increment current col
+	ADD R2, R2, #-1 ; Decrement width index
+	BRnzp REC_INNER_LOOP 
 RECT_END_INNER_LOOP
-
-
-
+	LEA R6, OS_GLOBAL_MEM
+	LDR R0, R6, #2 		; Reset col
+	LDR R2, R6, #3 		; Reset col index
+	ADD R3, R3, #-1 	; Decrement row index
+	ADD R1, R1, #1 		; Increment row
+	BRnzp RECT_OUTER_LOOP
 
 END_DRAW_RECT
+	LEA R6, OS_GLOBAL_MEM
+	LDR R7, R6, #1  	; Restore return address
 	RTI
 	
 ;;; TRAP_DRAW_SPRITE - draws an 8x8 sprite on the screen.
@@ -561,7 +570,6 @@ END_DRAW_RECT
 ;;;   video memory will be updated to include sprite of approriate color
 	.CODE
 TRAP_DRAW_SPRITE
-
-;;; YOUR CODE HERE
+	
 
 	RTI
