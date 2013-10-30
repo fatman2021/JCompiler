@@ -1,0 +1,7 @@
+clear
+reset
+as os os
+as frogger libc frogger
+ld os
+ld frogger
+break set TRAP_HALT
