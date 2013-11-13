@@ -1,0 +1,5 @@
+load my_file.asm
+set R4 FED
+set R3 6778
+script my_script.txt
+break FFED

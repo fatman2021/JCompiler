@@ -1,0 +1,14 @@
+123456    Mickey
+001234    Goofy
+768900   Tinkerbell
+576889    Sleepy
+569089    Sneezy
+535889    Dasher
+103345    Slimy
+116889    Prancer
+268889    Blitzen
+334589    Cupid
+121389    Rudolph
+456888    Santa
+451687    Grinch
+456789    slinky

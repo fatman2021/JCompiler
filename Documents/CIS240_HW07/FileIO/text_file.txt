@@ -1,0 +1,10 @@
+Random number 0 = 16807
+Random number 1 = 282475249
+Random number 2 = 1622650073
+Random number 3 = 984943658
+Random number 4 = 1144108930
+Random number 5 = 470211272
+Random number 6 = 101027544
+Random number 7 = 1457850878
+Random number 8 = 1458777923
+Random number 9 = 2007237709
