@@ -57,31 +57,49 @@ void print_list (list_elt *first_elt)
  */
 list_elt *makeOrder(FILE *stream) {
 
-	char update[MAX_LINE_LENGTH];
 	char *name;
 	int count;
+	list_elt *first_elt;
 
+	// MIGHT WANT TO THROW SOME SORT OF ERROR
 	if(stream==NULL) {
 		return NULL;
 	}
-	// NEED TO FIX NAME OF FILE
-	fopen("stream", "r");
-	if (feof(stream) == 1) {
-		return NULL;
-	}
 
-	fscanf(stream, "%s %d", name count);
+	// Initialize first element to NULL
+	first_elt = NULL;
+
 	while(feof(stream) != 1) {
 		fscanf(stream, "%s %d", name, count);
+		allCaps(name);
+		first_elt = update(first_elt, name, count);
 	}
+	return first_elt;
 
+}
+
+// Function to convert string to all caps
+ void allCaps(char *str) {
+	char *i = str;
+	char c = *i;
+	while(c != NULL) {
+		c = c.toupper();
+		i++;
+		c = *i;
+	}
 }
 
 
 int main() {
 
-	char fileName[MAX_LINE_LENGTH];
+	char *fileName;
+	FILE *theFile;
 
-	gets(fileName);
+	scanf("shopper %s", fileName);
+	theFile = fopen(*fileName, "r");
+	print_list(makeOrder(theFile));
+	fclose(theFile);
+
+	return 0;
 
 }

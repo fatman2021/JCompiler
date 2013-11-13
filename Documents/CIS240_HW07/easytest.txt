@@ -1,0 +1,5 @@
+Apples 5
+PEars 3
+BANANAS 10
+apples -3
+bananas -1
