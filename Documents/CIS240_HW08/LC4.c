@@ -1,10 +1,15 @@
 #include "LC4.h"
+
+// macros to access different bits
 #define INSN_OP(I)((I) >> 12)
 #define INSN_5_3(I)(((I) >> 3) & 0x7)
 #define INSN_8_7(I)(((I) >> 7) & 0x3)
 #define INSN_11(I)((I >> 11) & 0x1)
 #define INSN_5_4(I)((I >> 4) & 0x3)
-
+#define INSN_11_9(I)((I >> 9) & 0x7)
+#define INSN_8_6(I)((I >> 6) & 0x7)
+#define INSN_2_0(I)(I & 0x7)
+#define INSN_3_0(I)(I & 0xF)
 
 
 
@@ -128,7 +133,7 @@ int DecodeCurrentInstruction (unsigned short int INSN, ControlSignals *theContro
 					theControls->NZP_WE = 1;
 					theControls->DATA_WE = 0;
 					theControls->Privilege_CTL = 2;
-
+					break;
 			}
 			break;
 		case 0x2 :							// compare
@@ -592,10 +597,161 @@ int DecodeCurrentInstruction (unsigned short int INSN, ControlSignals *theContro
 }
 
 // Simulate the action of the datapath
-int SimulateDatapath (ControlSignals *theControls, MachineState *theMachineState, DatapathSignals *theDatapath);
+int SimulateDatapath (ControlSignals *theControls, MachineState *theMachineState, DatapathSignals *theDatapath) {
+
+	unsigned short int INSN = theMachineState->memory[theMachineState->PC];
+	// RS output
+	if(theControls->rsMux_CTL == 0) {
+		theDatapath->RS = theMachineState->R[INSN_8_6(INSN)];
+	}
+	else if(theControls->rsMux_CTL == 1) {
+		theDatapath->RS = theMachineState->R[7];
+	}
+	else if(theControls->rsMux_CTL == 2) {
+		theDatapath->RS = theMachineState->R[INSN_11_9(INSN)];
+	}
+	// RT output
+	if(theControls->rtMux_CTL == 0) {
+		theDatapath->RT = theMachineState->R[INSN_2_0(INSN)];
+	}
+	else if(theControls->rtMux_CTL == 1) {
+		theDatapath->RT = theMachineState->R[INSN_11_9(INSN)];
+	}
+	// Arithmetic ops
+	switch (theControls->Arith_CTL) {
+		case 0 :
+			switch (theControls->ArithMux_CTL) {
+				case 0 :
+					theDatapath->ArithmeticOps = (theDatapath->RS) + (theDatapath->RT);
+					break;
+				case 1 : 
+					theDatapath->ArithmeticOps = (theDatapath->RS) + //SEXT(IMM5) remember to sext!!
+					break;
+				case 2 :
+					theDatapath->ArithmeticOps = (theDatapath->RS) + //SEXT(IMM6)
+			}
+			break;
+		case 1 :
+			theDatapath->ArithmeticOps = (theDatapath->RS)*(theDatapath->RT);
+			break;
+		case 2 :
+			theDatapath->ArithmeticOps = (theDatapath->RS)-(theDatapath->RT);
+			break;
+		case 3 : 
+			theDatapath->ArithmeticOps = (theDatapath->RS)/(theDatapath->RT);
+			break;
+		case 4 :
+			theDatapath->ArithmeticOps = (theDatapath->RS)%(theDatapath->RT);
+	}
+	// LogicalOps
+	switch (theControls->LOGIC_CTL) {
+		case 0 :
+			if(theControls->LogicMux_CTL == 0) {
+				theDatapath->LogicalOps = (theDatapath->RS)&(theDatapath->RT);
+			}
+			else if(theControls->LogicMux_CTL == 1) {
+				theDatapath->LogicalOps = (theDatapath->RS)& //SEXT(IMM5)
+			}
+			break;
+		case 1 :
+			theDatapath->LogicalOps = ~(theDatapath->RS);
+			break;
+		case 2 : 
+			theDatapath->LogicalOps = (theDatapath->RS)|(theDatapath->RT);
+			break;
+		case 3 :
+			theDatapath->LogicalOps = (theDatapath->RS)^(theDatapath->RT);
+	}
+	// DEFINITELY GO OVER THIS
+	// Shifter
+	switch (theControls->SHIFT_CTL) {
+		case 0 :
+			theDatapath->Shifter = theDatapath->RS << ((unsigned short int)INSN_3_0(INSN));
+			break;
+		//FIX THIS: SHOULD BE SHIFTING BASED ON SIGN 
+		case 1 : 
+			theDatapath->Shifter = theDatapath->RS >>> ((unsigned short int)INSN_3_0(INSN));
+			break;
+		// this one should be fine because the RS is unsigned so the operator just shifts in zeroes
+		case 2 : 
+			theDatapath->Shifter = theDatapath->RS >> ((unsigned short int)INSN_3_0(INSN));
+	}
+	// Constants
+	switch (theControls->CONST_CTL) {
+		case 0 :
+			theDatapath->Constants = //SEXT(IMM9)
+			break;
+		case 1 : 
+			theDatapath->Constants = (theDatapath->RS & 0xFF)|((INSN & 0xFF) << 8);
+	}
+	// NEED TO FIX : Comparator
+	switch (theControls->CMP_CTL) {
+		case 0 :
+
+	}
+	// ALUMux
+	switch (theControls->ALUMux_CTL) {
+		case 0 : 
+			theDatapath->ALUMux = theDatapath->ArithmeticOps;
+			break;
+		case 1 :
+			theDatapath->ALUMux = theDatapath->LogicalOps;
+			break;
+		case 2 :
+			theDatapath->ALUMux = theDatapath->Shifter;
+			break;
+		case 3 : 
+			theDatapath->ALUMux = theDatapath->Constants;
+			break;
+		case 4 :
+			theDatapath->ALUMux = theDatapath->Comparator;
+	}
+	// regInputMux
+	switch (theControls->regInputMux_CTL) {
+		case 0 :
+			theDatapath->regInputMux = theDatapath->ALUMux;
+			break;
+		case 1 :
+			theDatapath->regInputMux = theMachineState->memory[theDatapath->ALUMux];
+			break;
+		case 2 :
+			theDatapath->regInputMux = (theMachineState->PC) + 1
+	}
+	// PCMux
+	switch (theControls->PCMux_CTL) {
+		case 0 :
+			unsigned short int NZP = theMachineState->PSR & 0x7
+			if(INSN_11_9(INSN) == NZP) {
+				theDatapath->PCMux = theMachineState->PC + 1 + //SEXT(IMM9)
+			}
+			else {
+				theDatapath->PCMux = theMachineState->PC + 1;
+			}
+			break;
+		case 1 :
+			theDatapath->PCMux = theMachineState->PC + 1;
+			break;
+		case 2 :
+			theDatapath->PCMux = theMachineState->PC + 1 + //SEXT(IMM11)
+			break;
+		case 3 :
+			theDatapath->PCMux = theDatapath->RS;
+			break;
+		case 4 :
+			theDatapath->PCMux = 0x8000 | (INSN & 0xFF);
+			break;
+		case 5 :
+			theDatapath->PCMux = (theMachineState->PC & 0x8000) | ((INSN & 0x7FF) << 4);
+	}
+	return 0;
+}
 
 // Update Machine State based on the prevailing control and Datapath Signals
-int UpdateMachineState (ControlSignals *theControls, MachineState *theMachineState, DatapathSignals *theDatapath);
+int UpdateMachineState (ControlSignals *theControls, MachineState *theMachineState, DatapathSignals *theDatapath){
+	return 0;
+}
 
 // Reset the machine state as Pennsim would do
-void Reset (MachineState *theMachineState);
+void Reset (MachineState *theMachineState) {
+
+}
