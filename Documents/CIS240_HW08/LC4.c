@@ -217,7 +217,7 @@ int DecodeCurrentInstruction (unsigned short int INSN, ControlSignals *theContro
 			break;
 		case 0x4 :							// jump sub-routine
 			// jsr
-			if (INSN_11(INSN)) { 	/
+			if (INSN_11(INSN)) { 	
 				theControls->PCMux_CTL = 5;
 				theControls->rsMux_CTL = 0;
 				theControls->rtMux_CTL = 0;
@@ -353,6 +353,7 @@ int DecodeCurrentInstruction (unsigned short int INSN, ControlSignals *theContro
 					theControls->NZP_WE = 1;
 					theControls->DATA_WE = 0;
 					theControls->Privilege_CTL = 2;
+			}
 			break;
 		case 0x6 :							// load
 			theControls->PCMux_CTL = 1;
@@ -715,13 +716,12 @@ int SimulateDatapath (ControlSignals *theControls, MachineState *theMachineState
 			theDatapath->regInputMux = theMachineState->memory[theDatapath->ALUMux];
 			break;
 		case 2 :
-			theDatapath->regInputMux = (theMachineState->PC) + 1
+			theDatapath->regInputMux = (theMachineState->PC) + 1;
 	}
 	// PCMux
 	switch (theControls->PCMux_CTL) {
 		case 0 :
-			unsigned short int NZP = theMachineState->PSR & 0x7
-			if(INSN_11_9(INSN) == NZP) {
+			if(INSN_11_9(INSN) == (theMachineState->PSR & 0x7)) {
 				theDatapath->PCMux = theMachineState->PC + 1 + //SEXT(IMM9)
 			}
 			else {
@@ -748,6 +748,11 @@ int SimulateDatapath (ControlSignals *theControls, MachineState *theMachineState
 
 // Update Machine State based on the prevailing control and Datapath Signals
 int UpdateMachineState (ControlSignals *theControls, MachineState *theMachineState, DatapathSignals *theDatapath){
+	theMachineState->PC = theDatapath->PCMux;
+
+	if(theControls->NZP_WE == 1) {
+
+	}
 	return 0;
 }
 
