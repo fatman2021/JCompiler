@@ -1,4 +1,5 @@
 #include "LC4.h"
+#include <stdio.h>
 
 // macros to access different bits
 #define INSN_OP(I)((I) >> 12)
@@ -10,6 +11,11 @@
 #define INSN_8_6(I)((I >> 6) & 0x7)
 #define INSN_2_0(I)(I & 0x7)
 #define INSN_3_0(I)(I & 0xF)
+#define SEXT5(I)(((I & 0x1F) > 0xF) ? I | 0xFFE0 : I)
+#define SEXT6(I)(((I & 0x3F) > 0x1F) ? I | 0xFFC0 : I)
+#define SEXT7(I)(((I & 0x7F) > 0x3F) ? I | 0xFF80 : I)
+#define SEXT9(I)(((I & 0x1FF) > 0xFF) ? I | 0xFE00 : I)
+#define SEXT11(I)(((I & 0x7FF) > 0x3FF) ? I | 0xF800 : I)
 
 
 
@@ -553,8 +559,12 @@ int DecodeCurrentInstruction (unsigned short int INSN, ControlSignals *theContro
 			}
 			break;
 		case 0xD : 							// hi-constant
+			if((INSN_8_7(INSN) != 0x2) && (INSN_8_7(INSN) != 0x3)) {
+				puts("Invalid hi-const instruction.");
+				break;
+			}
 			theControls->PCMux_CTL = 1;
-			theControls->rsMux_CTL = 0;
+			theControls->rsMux_CTL = 2;
 			theControls->rtMux_CTL = 0;
 			theControls->rdMux_CTL = 0;
 			theControls->regFile_WE = 1;
@@ -591,7 +601,7 @@ int DecodeCurrentInstruction (unsigned short int INSN, ControlSignals *theContro
 			theControls->Privilege_CTL = 1;
 			break;
 		default :
-			puts("Invalid instruction.");
+			printf("Invalid instruction: %d", INSN);
 			return 1;
 	}
 	return 0;
@@ -618,7 +628,7 @@ int SimulateDatapath (ControlSignals *theControls, MachineState *theMachineState
 	else if(theControls->rtMux_CTL == 1) {
 		theDatapath->RT = theMachineState->R[INSN_11_9(INSN)];
 	}
-	// Arithmetic ops
+	// Arithmetic ops -- CHECK unsigned vs. signed calcs
 	switch (theControls->Arith_CTL) {
 		case 0 :
 			switch (theControls->ArithMux_CTL) {
@@ -626,10 +636,10 @@ int SimulateDatapath (ControlSignals *theControls, MachineState *theMachineState
 					theDatapath->ArithmeticOps = (theDatapath->RS) + (theDatapath->RT);
 					break;
 				case 1 : 
-					theDatapath->ArithmeticOps = (theDatapath->RS) + //SEXT(IMM5) remember to sext!!
+					theDatapath->ArithmeticOps = (theDatapath->RS) + SEXT5(INSN); 
 					break;
 				case 2 :
-					theDatapath->ArithmeticOps = (theDatapath->RS) + //SEXT(IMM6)
+					theDatapath->ArithmeticOps = (theDatapath->RS) + SEXT6(INSN);
 			}
 			break;
 		case 1 :
@@ -651,7 +661,7 @@ int SimulateDatapath (ControlSignals *theControls, MachineState *theMachineState
 				theDatapath->LogicalOps = (theDatapath->RS)&(theDatapath->RT);
 			}
 			else if(theControls->LogicMux_CTL == 1) {
-				theDatapath->LogicalOps = (theDatapath->RS)& //SEXT(IMM5)
+				theDatapath->LogicalOps = (theDatapath->RS) & SEXT5(INSN);
 			}
 			break;
 		case 1 :
@@ -669,23 +679,26 @@ int SimulateDatapath (ControlSignals *theControls, MachineState *theMachineState
 		case 0 :
 			theDatapath->Shifter = theDatapath->RS << ((unsigned short int)INSN_3_0(INSN));
 			break;
-		//FIX THIS: SHOULD BE SHIFTING BASED ON SIGN 
+		//CHECK THIS EXTENSIVELY  
 		case 1 : 
-			theDatapath->Shifter = theDatapath->RS >>> ((unsigned short int)INSN_3_0(INSN));
+			int i;
+			for(i = 0; i < INSN_3_0(INSN); i++) {
+				theDatapath->RS = (theDatapath->RS >> 1) & 0x8000;
+			}
 			break;
 		// this one should be fine because the RS is unsigned so the operator just shifts in zeroes
 		case 2 : 
-			theDatapath->Shifter = theDatapath->RS >> ((unsigned short int)INSN_3_0(INSN));
+			theDatapath->Shifter = theDatapath->RS >> INSN_3_0(INSN);
 	}
 	// Constants
 	switch (theControls->CONST_CTL) {
 		case 0 :
-			theDatapath->Constants = //SEXT(IMM9)
+			theDatapath->Constants = SEXT9(INSN);
 			break;
 		case 1 : 
 			theDatapath->Constants = (theDatapath->RS & 0xFF)|((INSN & 0xFF) << 8);
 	}
-	// NEED TO FIX : Comparator
+	// NEED TO FIX : Comparator-- can we just do that subtraction and then cast the result? that seems like what we should do but then NZP would be updated based on sign regardless?
 	switch (theControls->CMP_CTL) {
 		case 0 :
 
@@ -721,8 +734,8 @@ int SimulateDatapath (ControlSignals *theControls, MachineState *theMachineState
 	// PCMux
 	switch (theControls->PCMux_CTL) {
 		case 0 :
-			if(INSN_11_9(INSN) == (theMachineState->PSR & 0x7)) {
-				theDatapath->PCMux = theMachineState->PC + 1 + //SEXT(IMM9)
+			if(INSN_11_9(INSN) & (theMachineState->PSR & 0x7)) { //if the two have any bits in common then the test is satisfied
+				theDatapath->PCMux = theMachineState->PC + 1 + SEXT9(INSN);
 			}
 			else {
 				theDatapath->PCMux = theMachineState->PC + 1;
@@ -732,7 +745,7 @@ int SimulateDatapath (ControlSignals *theControls, MachineState *theMachineState
 			theDatapath->PCMux = theMachineState->PC + 1;
 			break;
 		case 2 :
-			theDatapath->PCMux = theMachineState->PC + 1 + //SEXT(IMM11)
+			theDatapath->PCMux = theMachineState->PC + 1 + SEXT11(INSN);
 			break;
 		case 3 :
 			theDatapath->PCMux = theDatapath->RS;
@@ -748,15 +761,67 @@ int SimulateDatapath (ControlSignals *theControls, MachineState *theMachineState
 
 // Update Machine State based on the prevailing control and Datapath Signals
 int UpdateMachineState (ControlSignals *theControls, MachineState *theMachineState, DatapathSignals *theDatapath){
+	unsigned short int INSN = theMachineState->memory[theMachineState->PC];
+
+	if(theDatapath->PCMux > 0x1FFF || theDatapath->PCMux < 0x8000)
+
 	theMachineState->PC = theDatapath->PCMux;
 
 	if(theControls->NZP_WE == 1) {
-
+		// need to cast as signed so that nzp can be updated accurately 
+		signed short int input = (signed short int)theDatapath->regInputMux;
+		if(input > 0) {
+			theMachineState->PSR = theMachineState->PSR | 0x1; 
+		}
+		else {
+			theMachineState->PSR = theMachineState->PSR & 0xFFFE;
+		}
+		if(input == 0) {
+			theMachineState->PSR = theMachineState->PSR | 0x2;
+		}
+		else {
+			theMachineState->PSR = theMachineState->PSR & 0xFFFD;
+		}
+		if(input < 0) {
+			theMachineState->PSR = theMachineState->PSR | 0x4;
+		}
+		else {
+			theMachineState->PSR = theMachineState->PSR & 0xFFFB;
+		}
+	}
+	//this is where we would catch errors I believe
+	if(theControls->Privilege_CTL == 0) {
+		theMachineState->PSR = theMachineState->PSR & 0x7FFF;
+	}
+	else if(theControls->Privilege_CTL == 1) {
+		theMachineState->PSR = theMachineState->PSR | 0x8000;
+	}
+	// also here we could catch errors--might want to reverse order of computation
+	if(theControls->regFile_WE == 1) {
+		if(theControls->rdMux_CTL == 0) {
+			theMachineState->R[INSN_11_9(INSN)] = theDatapath->regInputMux;
+		}
+		else if (theControls->rdMux_CTL == 1) { 
+			theMachineState->R[7] = theDatapath->regInputMux;
+		}
+	}
+	// and here obvi
+	if(theControls->DATA_WE == 1) {
+		theMachineState->memory[theDatapath->ALUMux] = theDatapath->RT;
 	}
 	return 0;
 }
 
 // Reset the machine state as Pennsim would do
 void Reset (MachineState *theMachineState) {
+	int i;
+	theMachineState->PC = 0x8200;
+	theMachineState->PSR = 0x8002;
+	for(i = 0; i < 8; i++) {
+		theMachineState->R[i] = 0;
+	}
+	for(i = 0; i < 65536; i++) {
+		theMachineState->memory[i] = 0;
+	}
 
 }
