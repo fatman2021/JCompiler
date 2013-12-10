@@ -1,0 +1,195 @@
+// function ops
+/*void defun(FILE *outStream, char *name) {
+	fputs("\t.CODE\n", outStream);
+	fputs("\t.FALIGN\n", outStream);
+	//writes name of function to file
+	fprintf(outStream, "%s\n", name);
+	//prologue
+	fputs("\tADD R6 R6 #-3\n", outStream);	// allocate 3 slots for FP, RA, RV
+	fputs("\tSTR R7 R6 #1\n", outStream);	// save RA that was stored in R7
+	fputs("\tSTR R5 R6 #0\n", outStream); 	// save caller FP that is the value of R5
+	fputs("\tADD R5 R6 #0\n", outStream);	// set up local FP to begin at current stack top
+}	
+void funCall(FILE *outStream, char *name) {
+	fprintf(outStream, "\tJSR %s\n", name); 	// Jump to function name
+}*/
+void ret(FILE *outStream) {
+	//epilogue
+	fputs("\tLDR R0 R6 #0\n", outStream); 	// load value from top of stack
+	fputs("\tSTR R0 R5 #2\n", outStream);	// put this value into RV address
+	fputs("\tADD R6 R5 #0\n", outStream);	// move top of stack back to local frame
+	fputs("\tLDR R5 R6 #0\n", outStream);	// restore caller FP
+	fputs("\tLDR R7 R6 #1\n", outStream);	// restore RA
+	fputs("\tADD R6 R6 #2\n", outStream); 	// free RA, FP; top of stack is RV
+	fputs("\tRET\n", outStream);			// return
+}
+// push a decimal value to the top of the stack
+void pushDecimal(FILE *outStream, char *i) {
+	fprintf(outStream, "\tCONST R0 #%s\n", i);
+	fputs("\tSTR R0 R6 #-1\n", outStream);
+	fputs("\tADD R6 R6 #-1\n", outStream);
+}
+// push a hex value to the stack
+void pushHex(FILE *outStream, char *h) {
+	fprintf(outStream, "\tCONST R0 %s\n", h);
+	fputs("\tSTR R0 R6 #-1\n", outStream);
+	fputs("\tADD R6 R6 #-1\n", outStream);
+}
+// arithmetic ops
+void add(FILE *outStream) {
+	fputs("\tLDR R0 R6 #0\n", outStream);	// get values off top of stack
+	fputs("\tLDR R1 R6 #1\n", outStream);
+	fputs("\tADD R0 R0 R1\n", outStream);	// add and store in R0
+	fputs("\tADD R6 R6 #1\n", outStream);	// update SP
+	fputs("\tSTR R0 R6 #0\n", outStream); 	// push return value onto top of stack
+}
+void sub(FILE *outStream) {
+	fputs("\tLDR R0 R6 #0\n", outStream);	// get values off top of stack
+	fputs("\tLDR R1 R6 #1\n", outStream);
+	fputs("\tSUB R0 R0 R1\n", outStream);	// subtract and store in R0
+	fputs("\tADD R6 R6 #1\n", outStream);	// update SP
+	fputs("\tSTR R0 R6 #0\n", outStream); 	// push return value onto top of stack
+}
+void mul(FILE *outStream) {
+	fputs("\tLDR R0 R6 #0\n", outStream);	// get values off top of stack
+	fputs("\tLDR R1 R6 #1\n", outStream);
+	fputs("\tMUL R0 R0 R1\n", outStream);	// multiply and store in R0
+	fputs("\tADD R6 R6 #1\n", outStream);	// update SP
+	fputs("\tSTR R0 R6 #0\n", outStream); 	// push return value onto top of stack
+}
+void divide(FILE *outStream) {
+	fputs("\tLDR R0 R6 #0\n", outStream);	// get values off top of stack
+	fputs("\tLDR R1 R6 #1\n", outStream);
+	fputs("\tDIV R0 R0 R1\n", outStream);	// divide and store in R0
+	fputs("\tADD R6 R6 #1\n", outStream);	// update SP
+	fputs("\tSTR R0 R6 #0\n", outStream); 	// push return value onto top of stack
+}
+void mod(FILE *outStream) {
+	fputs("\tLDR R0 R6 #0\n", outStream);	// get values off top of stack
+	fputs("\tLDR R1 R6 #1\n", outStream);
+	fputs("\tMOD R0 R0 R1\n", outStream);	// mod and store in R0
+	fputs("\tADD R6 R6 #1\n", outStream);	// update SP
+	fputs("\tSTR R0 R6 #0\n", outStream); 	// push return value onto top of stack
+}
+// comparisons
+void lt(FILE *outStream) {
+	fputs("\tLDR R0 R6 #0\n", outStream);	// get a
+	fputs("\tLDR R1 R6 #1\n", outStream); 	// get b
+	fputs("\tADD R6 R6 #1\n", outStream); 	// update SP
+	fputs("\tCMP R0 R1\n", outStream); 	// a - b
+	fprintf(outStream, "\tBRn %s_comp_%d\n", fileName, comp_index);		// if negative, skip next 2 lines
+	fputs("\tCONST R0 #0\n", outStream);	// false, so want to return 0
+	fprintf(outStream, "\tBRnzp %s_comp_%d\n", fileName, comp_index + 1);		// skip next line
+	fprintf(outStream, "%s_comp_%d", fileName, comp_index);
+	fputs("\tCONST R0 #1\n", outStream);	// true, so want to return 1
+	fprintf(outStream, "%s_comp_%d\n", fileName, comp_index + 1);
+	comp_index++;
+	fputs("\tSTR R0 R6 #0\n", outStream); 	// push return value on top of stack
+}
+void le(FILE *outStream) {
+	fputs("\tLDR R0 R6 #0\n", outStream);	// get a
+	fputs("\tLDR R1 R6 #1\n", outStream); 	// get b
+	fputs("\tADD R6 R6 #1\n", outStream); 	// update SP
+	fputs("\tCMP R0 R1\n", outStream); 	// a - b
+	fprintf(outStream, "\tBRnz %s_comp_%d\n", fileName, comp_index);		// if negative or 0, skip next 2 lines
+	fputs("\tCONST R0 #0\n", outStream);	// false, so want to return 0
+	fprintf(outStream, "\tBRnzp %s_comp_%d\n", fileName, comp_index + 1);		// skip next line
+	fprintf(outStream, "%s_comp_%d", fileName, comp_index);
+	fputs("\tCONST R0 #1\n", outStream);	// true, so want to return 1
+	fprintf(outStream, "%s_comp_%d\n", fileName, comp_index + 1);
+	comp_index++;
+	fputs("\tSTR R0 R6 #0\n", outStream); 	// push return value on top of stack
+}
+void eq(FILE *outStream) {
+	fputs("\tLDR R0 R6 #0\n", outStream);	// get a
+	fputs("\tLDR R1 R6 #1\n", outStream); 	// get b
+	fputs("\tADD R6 R6 #1\n", outStream); 	// update SP
+	fputs("\tCMP R0 R1\n", outStream); 	// a - b
+	fprintf(outStream, "\tBRz %s_comp_%d\n", fileName, comp_index);		// if negative or 0, skip next 2 lines
+	fputs("\tCONST R0 #0\n", outStream);	// false, so want to return 0
+	fprintf(outStream, "\tBRnzp %s_comp_%d\n", fileName, comp_index + 1);		// skip next line
+	fprintf(outStream, "%s_comp_%d", fileName, comp_index);
+	fputs("\tCONST R0 #1\n", outStream);	// true, so want to return 1
+	fprintf(outStream, "%s_comp_%d\n", fileName, comp_index + 1);
+	comp_index++;
+	fputs("\tSTR R0 R6 #0\n", outStream); 	// push return value on top of stack
+}
+void ge(FILE *outStream) {
+	fputs("\tLDR R0 R6 #0\n", outStream);	// get a
+	fputs("\tLDR R1 R6 #1\n", outStream); 	// get b
+	fputs("\tADD R6 R6 #1\n", outStream); 	// update SP
+	fputs("\tCMP R0 R1\n", outStream); 	// a - b
+	fprintf(outStream, "\tBRzp %s_comp_%d\n", fileName, comp_index);		// if negative or 0, skip next 2 lines
+	fputs("\tCONST R0 #0\n", outStream);	// false, so want to return 0
+	fprintf(outStream, "\tBRnzp %s_comp_%d\n", fileName, comp_index + 1);		// skip next line
+	fprintf(outStream, "%s_comp_%d", fileName, comp_index);
+	fputs("\tCONST R0 #1\n", outStream);	// true, so want to return 1
+	fprintf(outStream, "%s_comp_%d\n", fileName, comp_index + 1);
+	comp_index++;
+	fputs("\tSTR R0 R6 #0\n", outStream); 	// push return value on top of stack
+}
+void gt(FILE *outStream) {
+	fputs("\tLDR R0 R6 #0\n", outStream);	// get a
+	fputs("\tLDR R1 R6 #1\n", outStream); 	// get b
+	fputs("\tADD R6 R6 #1\n", outStream); 	// update SP
+	fputs("\tCMP R0 R1\n", outStream); 	// a - b
+	fprintf(outStream, "\tBRp %s_comp_%d\n", fileName, comp_index);		// if negative or 0, skip next 2 lines
+	fputs("\tCONST R0 #0\n", outStream);	// false, so want to return 0
+	fprintf(outStream, "\tBRnzp %s_comp_%d\n", fileName, comp_index + 1);		// skip next line
+	fprintf(outStream, "%s_comp_%d", fileName, comp_index);
+	fputs("\tCONST R0 #1\n", outStream);	// true, so want to return 1
+	fprintf(outStream, "%s_comp_%d\n", fileName, comp_index + 1);
+	comp_index++;
+	fputs("\tSTR R0 R6 #0\n", outStream); 	// push return value on top of stack
+}
+// logic ops
+void and(FILE *outStream) {
+	fputs("\tLDR R0 R6 #0\n", outStream);	// get top two values from stack
+	fputs("\tLDR R1 R6 #1\n", outStream);
+	fputs("\tAND R0 R0 R1\n", outStream);	// bitwise and them
+	fputs("\tADD R6 R6 #1\n", outStream);	// update SP
+	fputs("\tSTR R0 R6 #0\n", outStream); 	// push return value on top of stack
+}
+void or(FILE *outStream) {
+	fputs("\tLDR R0 R6 #0\n", outStream);	// get top two values from stack
+	fputs("\tLDR R1 R6 #1\n", outStream);
+	fputs("\tOR R0 R0 R1\n", outStream);	// bitwise or them
+	fputs("\tADD R6 R6 #1\n", outStream);	// update SP
+	fputs("\tSTR R0 R6 #0\n", outStream); 	// push return value on top of stack
+}
+void not(FILE *outStream) {
+	fputs("\tLDR R0 R6 #0\n", outStream);	// get top value from stack
+	fputs("\tNOT R0 R0\n", outStream);		// bitwise not 
+	fputs("\tSTR R0 R6 #0\n", outStream); 	// push return value on top of stack
+}
+// stack ops
+void drop(FILE *outStream) {
+	fputs("\tADD R6 R6 #1\n", outStream);
+}
+void dup(FILE *outStream) {
+	fputs("\tLDR R0 R6 #0\n", outStream); 	// get value at top of stack
+	fputs("\tADD R6 R6 #-1\n", outStream);	// update SP
+	fputs("\tSTR R0 R6 #0\n", outStream);	// push value to new stack top
+}
+void swap(FILE *outStream) {
+	fputs("\tLDR R0 R6 #0\n", outStream);	// load top two values
+	fputs("\tLDR R1 R6 #1\n", outStream);
+	fputs("\tSTR R1 R6 #0\n", outStream);	// swap and push back to stack
+	fputs("\tSTR R0 R6 #1\n", outStream);
+}
+void rot(FILE *outStream) {
+	fputs("\tLDR R0 R6 #0\n", outStream);	// load top three values
+	fputs("\tLDR R1 R6 #1\n", outStream);
+	fputs("\tLDR R2 R6 #2\n", outStream);
+	fputs("\tSTR R0 R6 #1\n", outStream);	// rotate them and push back to stack
+	fputs("\tSTR R1 R6 #2\n", outStream);
+	fputs("\tSTR R2 R6 #0\n", outStream);
+}
+void pick(FILE *outStream) {
+	fputs("\tLDR R0 R6 #0\n", outStream); 	// pop index val off top of stack
+	fputs("\tADD R6 R6 #1\n", outStream);	// update SP
+	fputs("\tADD R0 R0 R6\n", outStream);	// offset R6 by index value in R0
+	fputs("\tLDR R0 R0 #0\n", outStream);	// load value at offset value
+	fputs("\tADD R6 R6 #-1\n", outStream); // update SP 
+	fputs("\tSTR R0 R6 #0\n", outStream);	// push return value to stack top
+}

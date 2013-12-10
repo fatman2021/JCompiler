@@ -1,0 +1,5 @@
+clear
+reset
+ld os
+ld gcd
+break set TRAP_HALT
