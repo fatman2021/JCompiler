@@ -332,19 +332,23 @@ int main(int argc, char *argv[]) {
 	char token[200];
 
 	theJFile = fopen(argv[1], "r");
-	//name = strrchr(argv[1], '.');
-	//need to read in name of file preceding .j so that the .asm file can have the same name
+	fileName = malloc(strlen(argv[1]) + 2);
+	strncpy(fileName, argv[1], strlen(argv[1]) - 2);
 	
-	theASMFile = fopen(argv[2], "w");
-	fputs("\t.CODE\n", theASMFile);
+	theASMFile = fopen(strcat(fileName, ".asm"), "w");
+	strncpy(fileName, argv[1], strlen(argv[1]) - 4);
+	
+	/*fputs("\t.CODE\n", theASMFile);
 	fputs("\t.ADDR 0x0000\n", theASMFile);
 	fputs("STACK_START .UCONST 0x7FFF\n", theASMFile);
-	fputs("\tLC R6 STACK_START\n\tLC R5 STACK_START\n", theASMFile);
+	fputs("\tLC R6 STACK_START\n\tLC R5 STACK_START\n", theASMFile);*/
 
 	while(!feof(theJFile)) {
 		readToken(theJFile, token);
 		handleToken(theJFile, theASMFile, token);
 	}
+	/*fputs("\t.OS\n\t.CODE\n\t.ADDR 0x8200\n\tRTI\n", theASMFile);*/
+	free(fileName);
 	return 0;
-	fputs("\t.OS\n\t.CODE\n\t.ADDR 0x8200\n\tRTI\n", theASMFile);
+
 }
