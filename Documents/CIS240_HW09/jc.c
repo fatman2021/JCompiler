@@ -5,42 +5,8 @@
 
 char *fileName;
 int ind = 0;		
-int nest = 0;
 int comp_index = 0;
 
-
-// if statement handling
-void ifHandle(FILE *instream, FILE *outStream) {
-	int starting_index = ind;
-	int inner_count = 0;
-	int endif = 0;
-	char token[200];
-	nest++;
-	fputs("\tLDR R0 R6 #0\n", outStream);	// pop value off top of stack
-	fputs("\tADD R6 R6 #1\n", outStream); 	// update SP
-	fputs("\tCMPI R0 #0\n", outStream);	// check if top of stack was true
-	fprintf(outStream, "\tBRz %s_%d\n", fileName, ind + (2 * nest));	// if false, break to assigned label
-	while(!endif) {
-		readToken(inStream, token);
-		handleToken(inStream, outStream, token);
-		if(strcmp(token, "if") == 0) {
-			inner_count++;
-		}
-		if(strcmp(token, "endif") == 0) {
-			endif = 1;
-		}
-	}
-	ind = starting_index + (2 * inner_count) + 1;
-}
-void elseHandle(FILE *outStream) {
-	fprintf(outStream, "\tBRnzp %s_%d\n", fileName, ind + (2 * nest) + 1);
-	fprintf(outStream, "%s_%d\n", fileName, ind + (2 * nest));
-	ind++;
-}
-void endif(FILE *outStream) {
-	fprintf(outStream, "%s_%d\n", fileName, ind + (2 * nest));
-	nest--;
-}
 // checks if null-terminated string is made up of all alpha-numeric characters
 // returns 1 if it is and 0 if not
 int isAlnumString(char *str) {
@@ -126,14 +92,14 @@ void readToken(FILE *inStream, char *token) {
 		}
 	}
 	// make token null-terminating
-	*token = '\0';
+	*token = 0; //check this
 }
 void handleToken(FILE *inStream, FILE *outStream, char *token) {
 	int n;
 	char name[200];
-	if(*token == 0) {
-		return;
-	}
+	int starting_index;
+	int hasElse = 0;
+	int endif = 0;
 	if(strcmp(token, "+") == 0) {
 		fputs("\tLDR R0 R6 #0\n", outStream);	// get values off top of stack
 		fputs("\tLDR R1 R6 #1\n", outStream);
@@ -289,10 +255,30 @@ void handleToken(FILE *inStream, FILE *outStream, char *token) {
 		fputs("\tSTR R0 R6 #0\n", outStream);	// push return value to stack top
 	}
 	else if(strcmp(token, "if") == 0) {
-		ifHandle(inStream, outStream);
-	}
-	else if(strcmp(token, "else") == 0) {
-		elseHandle(outStream);
+		ind+=2;
+		starting_index = ind;
+		fputs("\tLDR R0 R6 #0\n", outStream);	// pop value off top of stack
+		fputs("\tADD R6 R6 #1\n", outStream); 	// update SP
+		fputs("\tCMPI R0 #0\n", outStream);	// check if top of stack was true
+		fprintf(outStream, "\tBRz %s_%d\n", fileName, ind);	// if false, break to assigned label
+		while(!endif) {
+			readToken(inStream, token);
+			if(strcmp(token, "if") == 0) {
+				handleToken(inStream, outStream, token);
+			}
+			else if(strcmp(token, "else") == 0) {
+				fprintf(outStream, "\tBRnzp %s_%d\n", fileName, starting_index + 1);
+				fprintf(outStream, "%s_%d\n", fileName, starting_index);
+				hasElse = 1;
+			}
+			else if(strcmp(token, "endif") == 0) {
+				fprintf(outStream, "%s_%d\n", fileName, starting_index + hasElse);
+				endif = 1;
+			}
+			else {
+				handleToken(inStream, outStream, token);
+			}
+		}
 	}
 	else if(strcmp(token, "defun") == 0) {
 		readToken(inStream, name);
@@ -321,15 +307,14 @@ void handleToken(FILE *inStream, FILE *outStream, char *token) {
 		fputs("\tRET\n", outStream);			// return
 	}
 	else if(isDecimalString(token)) {
-		fprintf(outStream, "\tCONST R0 #%s\n", i);
+		fprintf(outStream, "\tCONST R0 #%s\n", token);
 		fputs("\tSTR R0 R6 #-1\n", outStream);
 		fputs("\tADD R6 R6 #-1\n", outStream);
 	}
 	else if(isHexString(token)) {
-		fprintf(outStream, "\tCONST R0 %s\n", h);
+		fprintf(outStream, "\tCONST R0 %s\n", token);
 		fputs("\tSTR R0 R6 #-1\n", outStream);
 		fputs("\tADD R6 R6 #-1\n", outStream);
-}
 	}
 	else if(isAlnumString(token)) {
 		fprintf(outStream, "\tJSR %s\n", token); 	// Jump to function name
